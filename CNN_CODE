@@ -39,3 +39,122 @@ import warnings
 import math
 import os
 from tensorflow.keras.utils import to_categorical
+
+
+datagen = ImageDataGenerator(rescale=1./255.,validation_split=0.20)
+
+
+train_df = pd.read_csv("D:/Composite_Material_Design/Material_Design/NewSimulation_real/Train/train_ds.csv")
+test_df = pd.read_csv("D:/Composite_Material_Design/Material_Design/NewSimulation_real/Test/test_ds.csv")
+
+train_ds = datagen.flow_from_dataframe(
+    dataframe=train_df,
+    directory="D:/Composite_Material_Design/Material_Design/NewSimulation/Train",
+    x_col="image_path",
+    y_col=["Youngs Modulus","Possion Ratio"],
+    subset="training",
+    batch_size=4,
+    shuffle=False,
+    class_mode="raw",
+    target_size=(496,369)
+)
+val_ds = datagen.flow_from_dataframe(
+    dataframe=train_df,
+    directory="D:/Composite_Material_Design/Material_Design/NewSimulation/Train",
+    x_col="image_path",
+    y_col=["Youngs Modulus","Possion Ratio"],
+    subset="validation",
+    batch_size=4,
+    shuffle=False,
+    class_mode="raw",
+    target_size=(496,369)
+)
+test_datagen=ImageDataGenerator(rescale=1./255.)
+test_ds = test_datagen.flow_from_dataframe(
+    dataframe=test_df,
+    directory="D:/Composite_Material_Design/Material_Design/NewSimulation/Test",
+    x_col="image_path",
+    y_col=["Youngs Modulus","Possion Ratio"],
+    batch_size=4,
+    shuffle=False,
+    class_mode="raw",
+    target_size=(496, 369)
+)
+
+
+from tensorflow.keras import datasets, layers, models
+model = models.Sequential()
+model.add(layers.Conv2D(512, (3, 3), activation='relu', input_shape=(496, 369, 3)))
+model.add(layers.MaxPooling2D((2, 2)))
+model.add(layers.Conv2D(256, (3, 3), activation='relu'))
+model.add(layers.MaxPooling2D((2, 2)))
+model.add(layers.Conv2D(128, (3, 3), activation='relu'))
+model.add(layers.MaxPooling2D((2, 2)))
+model.add(layers.Conv2D(64, (3, 3), activation='relu'))
+model.add(layers.MaxPooling2D((2, 2)))
+model.add(layers.Conv2D(32, (3, 3), activation='relu'))
+model.add(layers.Flatten())
+model.add(layers.Dense(1000, activation='relu'))
+# model.add(layers.BatchNormalization(axis=-1 ,momentum=0.99,epsilon=0.001)),
+model.add(layers.Dropout(0.2)),
+model.add(layers.Dense(100, activation='relu'))
+# model.add(layers.BatchNormalization(axis=-1 ,momentum=0.99,epsilon=0.001)),
+# model.add(layers.Dropout(0.2)),
+model.add(layers.Dense(50, activation='relu'))
+model.add(layers.Dense(10, activation='linear'))
+# model.add(layers.BatchNormalization(axis=-1 ,momentum=0.99,epsilon=0.001)),
+# model.add(layers.Dropout(0.2)),
+model.add(layers.Dense(2))
+model.summary()
+model.compile(optimizer='adam',
+              loss=tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.NONE),
+              metrics=['mean_squared_error'])
+
+
+history = model.fit(train_ds, epochs=20, 
+                    validation_data=(val_ds))
+
+print('\n Test accuracy')
+print("Real test labels")
+print(test_ds.labels[0:5])
+print("*****")
+print("predicted test labels")
+predictedY = model.predict(test_ds)
+print(predictedY[0:5])
+
+for i in range(len(test_ds.labels)):
+    plt.plot(test_ds.labels[i][0], predictedY[i][0], 'o')
+    
+x1, y1 = [3.5, 9.5], [3.5, 9.5]
+x2, y2 = [0.35, 0.55], [0.35, 0.55]
+
+plt.plot(x1, y1, marker = 'o')
+plt.xlabel("Real Data (Youngs Modulus)")
+plt.ylabel("Predicted Data")
+plt.show()
+
+for i in range(len(test_ds.labels)):
+    plt.plot(test_ds.labels[i][1], predictedY[i][1], 'o')
+
+plt.plot(x2, y2, marker = 'o')
+plt.xlabel("Real Data (Possion Ratio)")
+plt.ylabel("Predicted Data")
+plt.show()
+#calculate r squered 
+young_modulus_true = [None] * len(test_ds.labels); 
+possion_ratio_true = [None] * len(test_ds.labels); 
+young_modulus_cnn = [None] * len(test_ds.labels); 
+possion_ratio_cnn = [None] * len(test_ds.labels); 
+for i in range(len(test_ds.labels)):
+    young_modulus_true[i] = test_ds.labels[i][0]
+    possion_ratio_true[i] = test_ds.labels[i][1]
+    young_modulus_cnn[i] = predictedY[i][0]
+    possion_ratio_cnn[i] = predictedY[i][1]
+correlation_matrix_young_modulus = np.corrcoef(young_modulus_true, young_modulus_cnn)
+correlation_xy_young_modulus = correlation_matrix_young_modulus[0,1]
+r_squared_young = correlation_xy_young_modulus**2 
+print("Young modulus r2 = ", r_squared_young)
+correlation_matrix_possion_ratio = np.corrcoef(possion_ratio_true, possion_ratio_cnn)
+correlation_xy_possion_ratio = correlation_matrix_possion_ratio[0,1]
+r_squared = correlation_xy_possion_ratio**2 
+print("Possion ratio r2 = ", r_squared)
