@@ -1,0 +1,941 @@
+import random
+import math
+# import matplotlib.pyplot as plt
+import numpy as np
+
+# -*- coding: mbcs -*-
+from part import *
+from material import *
+from section import *
+from assembly import *
+from step import *
+from interaction import *
+from load import *
+from mesh import *
+from optimization import *
+from job import *
+from sketch import *
+from visualization import *
+from connectorBehavior import *
+# Create the Box
+
+## Importing ABAQUS Data and Python modules ##
+from abaqus import *
+from abaqusConstants import *
+import __main__
+import math
+import section
+import regionToolset
+import displayGroupMdbToolset as dgm
+import part
+import material
+import assembly
+import step
+import interaction
+import load
+import mesh
+import job
+import sketch
+import visualization
+import xyPlot
+import displayGroupOdbToolset as dgo
+import connectorBehavior
+import time
+import os
+import sys
+import ctypes
+import multiprocessing
+
+
+
+
+# Create Random circle
+# Specify the initial data
+box_length = 20
+box_width = 20
+max_radius = 1.5
+min_radius = 0.5
+#***************#
+dataset = 2001
+# Cordinate of circels center
+
+for epoch in range(2000, dataset, 1):
+    # Create Random number of circle
+    num_circle = round(random.uniform(30, 110))
+    print("******Number Of Circle*********")
+    print(num_circle)
+    mdb.models['Model-1'].ConstrainedSketch(name='__profile__', sheetSize=200.0)
+    mdb.models['Model-1'].sketches['__profile__'].rectangle(point1=(10.0, 10.0),
+                                                            point2=(-10.0, -10.0))
+    mdb.models['Model-1'].Part(dimensionality=TWO_D_PLANAR, name='Part-1', type=
+    DEFORMABLE_BODY)
+    mdb.models['Model-1'].parts['Part-1'].BaseShell(sketch=
+                                                    mdb.models['Model-1'].sketches['__profile__'])
+    del mdb.models['Model-1'].sketches['__profile__']
+    mdb.models['Model-1'].ConstrainedSketch(gridSpacing=2.82, name='__profile__',
+                                            sheetSize=113.13, transform=
+                                            mdb.models['Model-1'].parts['Part-1'].MakeSketchTransform(
+                                                sketchPlane=mdb.models['Model-1'].parts['Part-1'].faces[0],
+                                                sketchPlaneSide=SIDE1, sketchOrientation=RIGHT, origin=(0.0, 0.0, 0.0)))
+    mdb.models['Model-1'].parts['Part-1'].projectReferencesOntoSketch(filter=
+                                                                      COPLANAR_EDGES,
+                                                                      sketch=mdb.models['Model-1'].sketches[
+                                                                          '__profile__'])
+
+    def cor():
+        # Check if the circle located in the box
+        i = 0
+        while i < 1:
+            x = round(random.uniform(-box_length / 2, box_length / 2), 2)
+            y = round(random.uniform(-box_width / 2, box_width / 2), 2)
+            r = round(random.uniform(min_radius, max_radius), 2)
+            if x + r < (box_length / 2) and x - r > (-box_length / 2) and y + r < (box_width / 2) and y - r > (-box_width / 2):
+                cor = [x, y, r]
+                break
+            else:
+                i -= 1
+            i += 1
+        return cor
+    # Calculate two circle distance
+    def distance(x1, y1, x2, y2):
+        dsq = (x1 - x2) ** 2 + (y1 - y2) ** 2
+        d = np.sqrt(dsq)
+        return d
+
+    circles = []
+    circles.append(cor())
+    print("*******")
+    i = 0
+    circles_area = 0
+    while i < num_circle - 1:
+        new_cor = cor()
+        x = new_cor[0]
+        y = new_cor[1]
+        r = new_cor[2]
+        overlap = False
+        for j in range(len(circles)):
+            if r + circles[j][2] > distance(circles[j][0], circles[j][1], x, y):
+                overlap = True
+                i -= 1
+                break
+        if not overlap:
+            circles.append(new_cor)
+            circles_area = circles[j][2] ** 2 * math.pi + circles_area
+        i += 1
+    print("******Circle Area******")
+    print((circles_area / 1600) * 100)
+    # Save All Circle cordinate in a txt file
+    filename = ('Input_Circles/%s.txt'%epoch)
+    f = open(filename, 'w')
+    for i in range(len(circles)):
+        f.write(str(circles[i][0]))
+        f.write(',')
+        f.write(str(circles[i][1]))
+        f.write(',')
+        f.write(str(circles[i][2]))
+        f.write('\n')
+    f.close()
+    # Define Material Properties
+    #material properties of bioglass 45s driven from Elastic Properties of substituted 45S5 Bioactive Glasses and Glass - Ceramics
+    mdb.models['Model-1'].Material(name='Fibre')
+    # mdb.models['Model-1'].materials['Fibre'].Density(table=((2.7e-12, ), ))
+    mdb.models['Model-1'].materials['Fibre'].Elastic(table=((0.003, 0.49), ))
+    mdb.models['Model-1'].HomogeneousSolidSection(material='Fibre', name='FibreSec'
+        , thickness=None)
+    # Create Sets for all Circles and matrix
+
+    # Create Sets for all Circles and matrix
+    mdb.models['Model-1'].Material(name='Matrix')
+    # mdb.models['Model-1'].materials['Matrix'].Density(table=((2.707e-9, ), ))
+    mdb.models['Model-1'].materials['Matrix'].Elastic(table=((76740.0, 0.261), ))
+    mdb.models['Model-1'].HomogeneousSolidSection(material='Matrix', name=
+        'MatrixSec', thickness=None)
+    # Create Circles
+    for i in range(len(circles)):
+        mdb.models['Model-1'].sketches['__profile__'].CircleByCenterPerimeter(center=(
+            circles[i][0], circles[i][1]), point1=(circles[i][0] + circles[i][2], circles[i][1]))
+
+
+    mdb.models['Model-1'].parts['Part-1'].PartitionFaceBySketch(faces=
+        mdb.models['Model-1'].parts['Part-1'].faces.getSequenceFromMask(('[#1 ]',
+        ), ), sketch=mdb.models['Model-1'].sketches['__profile__'])
+    del mdb.models['Model-1'].sketches['__profile__']
+    
+    mdb.models['Model-1'].parts['Part-1'].Set(
+        faces=mdb.models['Model-1'].parts['Part-1'].faces.findAt(((9.9, 9.9, 0.0),)),
+        name='Fibre')
+    mdb.models['Model-1'].parts['Part-1'].SectionAssignment(offset=0.0,
+                                                            offsetField='', offsetType=MIDDLE_SURFACE, region=
+                                                            mdb.models['Model-1'].parts['Part-1'].sets['Fibre'],
+                                                            sectionName='FibreSec',
+                                                            thicknessAssignment=FROM_SECTION)
+
+    for i in range(len(circles)):
+        mdb.models['Model-1'].parts['Part-1'].Set(
+            faces=mdb.models['Model-1'].parts['Part-1'].faces.findAt(((circles[i][0], circles[i][1], 0.0),)),
+            name='Matrix_%s'%i)
+        mdb.models['Model-1'].parts['Part-1'].SectionAssignment(offset=0.0,
+                                                                offsetField='', offsetType=MIDDLE_SURFACE, region=
+                                                                mdb.models['Model-1'].parts['Part-1'].sets['Matrix_%s'%i],
+                                                                sectionName='MatrixSec',
+                                                                thicknessAssignment=FROM_SECTION)
+    # Create Steps and Mesh
+    mdb.models['Model-1'].rootAssembly.DatumCsysByDefault(CARTESIAN)
+    mdb.models['Model-1'].rootAssembly.Instance(dependent=ON, name='Part-1-1',
+        part=mdb.models['Model-1'].parts['Part-1'])
+    mdb.models['Model-1'].StaticStep(name='Step-1', previous='Initial')
+    mdb.models['Model-1'].parts['Part-1'].seedPart(deviationFactor=0.1,
+        minSizeFactor=0.1, size=0.5)
+    mdb.models['Model-1'].parts['Part-1'].generateMesh()
+
+    # Calculate Material Properties
+    a = mdb.models['Model-1'].rootAssembly
+    a.regenerate()
+    session.viewports['Viewport: 1'].setValues(displayedObject=a)
+    a = mdb.models['Model-1'].rootAssembly
+    a.features['Part-1-1'].suppress()
+    a = mdb.models['Model-1'].rootAssembly
+    a.features['Part-1-1'].resume()
+
+
+    ## Plugin main GUI function ##
+
+    def feasypbc(part, inst, meshsens, E11, E22, E33, G12, G13, G23, CTE, CPU, onlyPBC, intemp, fntemp):
+        import os
+        path = os.getcwd()
+        for T in (range(1)):
+            start = time.time()
+            modelName = part
+            instanceName = inst
+            upperName = inst.upper()
+
+            fail = []
+            keycheck2 = [inst]
+
+            if part not in (mdb.models.keys()):
+                Er2 = 0
+                messageBox2 = ctypes.windll.user32.MessageBoxA
+                returnValue = messageBox2(Er2, 'Model name is incorrect, please input the correct Model name.',
+                                          'EasyPBC Start-up error 02', 0x30 | 0x0)
+                print('Start-up error 02. Refer EasyPBC user guide')
+                continue
+
+            a = mdb.models[modelName].rootAssembly
+            errorcheck1 = mdb.models[modelName].rootAssembly.instances.keys()
+            if errorcheck1 == fail:
+                Er1 = 0
+                messageBox1 = ctypes.windll.user32.MessageBoxA
+                returnValue = messageBox1(Er1, 'Model part is not created!\nPlease create part and try again',
+                                          'EasyPBC Start-up error 01', 0x30 | 0x0)
+                print('Start-up error 01. Refer EasyPBC user guide')
+                continue
+
+            if (mdb.models[modelName].rootAssembly.instances.keys()) != keycheck2:
+                Er3 = 0
+                messageBox3 = ctypes.windll.user32.MessageBoxA
+                returnValue = messageBox3(Er3, 'Instance name is incorrect, please input the correct instance name.',
+                                          'EasyPBC Start-up error 03', 0x30 | 0x0)
+                print('Start-up error 03. Refer EasyPBC user guide')
+                continue
+
+            if CPU <= 0:
+                Er5 = 0
+                messageBox5 = ctypes.windll.user32.MessageBoxA
+                returnValue = messageBox5(Er5,
+                                          'Specified number of CPUs is <= zero, please set it to a value larger than zero.',
+                                          'EasyPBC Start-up error 05', 0x30 | 0x0)
+                print('Start-up error 05. Refer EasyPBC user guide')
+                continue
+
+            CPUs = int(round(CPU))
+            if CPUs > multiprocessing.cpu_count():
+                CPUs = multiprocessing.cpu_count()
+                print(
+                    'Warning: Specified number of CPUs is greater than the available. The maximum available number of CPUs is used (%s CPU(s)).' % CPUs)
+
+            Nodeset = mdb.models[modelName].rootAssembly.instances[instanceName].nodes
+
+            ## Start of sets creation ##
+            j = 0
+            x = []
+            y = []
+            z = []
+            c1 = []
+            c2 = []
+            c3 = []
+            c4 = []
+            c5 = []
+            c6 = []
+            c7 = []
+            c8 = []
+            Max = []
+            ftedgexyz = {}
+            btedgexyz = {}
+            fbedgexyz = {}
+            bbedgexyz = {}
+            fledgexyz = {}
+            bledgexyz = {}
+            fredgexyz = {}
+            bredgexyz = {}
+            ltedgexyz = {}
+            rtedgexyz = {}
+            lbedgexyz = {}
+            rbedgexyz = {}
+            frontsxyz = {}
+            backsxyz = {}
+            topsxyz = {}
+            botsxyz = {}
+            leftsxyz = {}
+            rightsxyz = {}
+            frontbcxyz = {}
+            backbcxyz = {}
+            topbcxyz = {}
+            botbcxyz = {}
+            leftbcxyz = {}
+            rightbcxyz = {}
+            ftedge = []
+            btedge = []
+            fbedge = []
+            bbedge = []
+            fledge = []
+            fredge = []
+            bledge = []
+            bredge = []
+            ltedge = []
+            lbedge = []
+            rtedge = []
+            rbedge = []
+            fronts = []
+            backs = []
+            lefts = []
+            rights = []
+            tops = []
+            bots = []
+            backs = []
+            frontbc = []
+            backbc = []
+            leftbc = []
+            rightbc = []
+            topbc = []
+            botbc = []
+            backbc = []
+            errorset = []
+            coc1 = {}
+            coc2 = {}
+            coc3 = {}
+            coc4 = {}
+            coc5 = {}
+            coc6 = {}
+            coc7 = {}
+            coc8 = {}
+
+            error = False
+
+            print('----------------------------------')
+            print('-------- Start of EasyPBC --------')
+            print('----------------------------------')
+
+            ## Identifying RVE size ##
+            for i in Nodeset:
+                x.insert(j, i.coordinates[0])
+                y.insert(j, i.coordinates[1])
+                z.insert(j, i.coordinates[2])
+                j = j + 1
+
+            errorcheck4 = x
+            if not errorcheck4:
+                Er4 = 0
+                messageBox4 = ctypes.windll.user32.MessageBoxA
+                returnValue = messageBox4(Er4,
+                                          'Instance not detected! Make sure:\n1- Instance is created;\n2- Double click on instance to refresh it before running EasyPBC;\n3- Part/instnace is meshed.',
+                                          'EasyPBC Start-up error 04', 0x30 | 0x0)
+                print('Start-up error 04. Refer EasyPBC user guide')
+                continue
+
+            Max = max(x)
+            May = max(y)
+            Maz = max(z)
+            Mnx = min(x)
+            Mny = min(y)
+            Mnz = min(z)
+            if (Maz - Mnz) <= meshsens:  ## 2D Model Check
+
+                ############################################ 2D Section #####################################
+
+                L = abs(Max - Mnx)
+                H = abs(May - Mny)
+
+                Dispx = L * 0.2
+                Dispy = H * 0.2
+
+                #### This part is commented out to reduce complexity for users whom merge parts into a single instance. ##############
+
+                ##                        partName = mdb.models[modelName].rootAssembly.instances[inst].partName                ## Extracts part name used in the instance
+                ##                        AssSec = mdb.models[modelName].parts[partName].sectionAssignments[0].sectionName
+                ##                        if AssSec == None:
+                ##                                print 'Warning: No shell sections detected, please create a section and try again!!'
+                ##                                print '         Refer to error 09 troubleshooting in easyPBC user guide.'
+                ##                                error=True
+                ##                                continue
+
+                SecName = mdb.models['Model-1'].sections.keys()[0]  ## Finding the name of first section
+                Thikness = mdb.models[modelName].sections[SecName].thickness
+                skipAtt = False
+
+                if Thikness == None or Thikness == 0:
+                    Thikness = 1
+                    print
+                    'Attention: EasyPBC did not detected a shell thickness. Thus, it assumes thickness is equal to 1.0 unit length'
+                    print
+                    '           If another thickness value is desired, divide the elastic property(ies) by the actual thickness value.'
+                    skipAtt = True
+                if skipAtt == False:
+                    print
+                    'Attention: EasyPBC detected a shell thickness of %s unit length from the first section in ABAQUS property module.' % Thikness
+                    print
+                    '           If this value is incorrect (this section is not used), multiply the elastic property(ies) %s and divide it by the actual value.' % Thikness
+
+                ## Creating Ref. Points (Same R.Ps as in the 3D case) ##
+                for i in a.features.keys():
+                    if i.startswith('RP'):
+                        del a.features['%s' % (i)]
+                a.ReferencePoint(
+                    point=(Max + 0.8 * abs(Max - Mnx), May - 0.5 * (May - Mny), Maz - 0.5 * (Maz - Mnz)))  ## RP6: G23
+                a.ReferencePoint(
+                    point=(Max + 0.6 * abs(Max - Mnx), May - 0.5 * (May - Mny), Maz - 0.5 * (Maz - Mnz)))  ## RP5: G13
+                a.ReferencePoint(
+                    point=(Max + 0.4 * abs(Max - Mnx), May - 0.5 * (May - Mny), Maz - 0.5 * (Maz - Mnz)))  ## RP4: G12
+                a.ReferencePoint(point=(Max + 0.2 * abs(Max - Mnx), May - 0.5 * (May - Mny),
+                                        Maz - 0.5 * (Maz - Mnz)))  ## RP3: Rigid body movement X-axis
+                a.ReferencePoint(point=(Max - 0.5 * (Max - Mnx), May - 0.5 * (May - Mny),
+                                        Maz + 0.2 * abs(Maz - Mnz)))  ## RP2: Rigid body movement Z-axis
+                a.ReferencePoint(point=(Max - 0.5 * (Max - Mnx), May + 0.2 * abs(May - Mny),
+                                        Maz - 0.5 * (Maz - Mnz)))  ## RP1: Rigid body movement Y-axis
+
+                r1 = a.referencePoints
+
+                ## Naming Ref. Points ##
+                d = 1
+                for i in r1.keys():
+                    refPoints1 = (r1[i],)
+                    a.Set(referencePoints=refPoints1, name='RP%s' % (d))
+                    d = d + 1
+
+                ## Identifying boundary nodes ##
+                for i in Nodeset:
+                    if (Mnx + meshsens) < i.coordinates[0] < (Max - meshsens) and (Mny + meshsens) < i.coordinates[
+                        1] < (
+                            May - meshsens):
+                        continue
+
+                    if abs(i.coordinates[0] - Max) <= meshsens and abs(i.coordinates[1] - May) <= meshsens:
+                        c1.insert(0, i.label)
+                        coc1[i.label] = [i.coordinates[0], i.coordinates[1]]
+                    if abs(i.coordinates[0] - Mnx) <= meshsens and abs(i.coordinates[1] - May) <= meshsens:
+                        c2.insert(0, i.label)
+                        coc2[i.label] = [i.coordinates[0], i.coordinates[1]]
+                    if abs(i.coordinates[0] - Max) <= meshsens and abs(i.coordinates[1] - Mny) <= meshsens:
+                        c5.insert(0, i.label)
+                        coc5[i.label] = [i.coordinates[0], i.coordinates[1]]
+                    if abs(i.coordinates[0] - Mnx) <= meshsens and abs(i.coordinates[1] - Mny) <= meshsens:
+                        c6.insert(0, i.label)
+                        coc6[i.label] = [i.coordinates[0], i.coordinates[1]]
+                    if abs(i.coordinates[0] - Max) <= meshsens and abs(i.coordinates[1] - May) > meshsens and abs(
+                            i.coordinates[1] - Mny) > meshsens:
+                        frontsxyz[i.label] = [i.coordinates[0], i.coordinates[1]]
+                    if abs(i.coordinates[0] - Mnx) <= meshsens and abs(i.coordinates[1] - May) > meshsens and abs(
+                            i.coordinates[1] - Mny) > meshsens:
+                        backsxyz[i.label] = [i.coordinates[0], i.coordinates[1]]
+                    if abs(i.coordinates[1] - May) <= meshsens and abs(i.coordinates[0] - Max) > meshsens and abs(
+                            i.coordinates[0] - Mnx) > meshsens:
+                        topsxyz[i.label] = [i.coordinates[0], i.coordinates[1]]
+                    if abs(i.coordinates[1] - Mny) <= meshsens and abs(i.coordinates[0] - Max) > meshsens and abs(
+                            i.coordinates[0] - Mnx) > meshsens:
+                        botsxyz[i.label] = [i.coordinates[0], i.coordinates[1]]
+
+                ## Checking number of nodes of opposite/associated sets ##
+                if len(frontsxyz) != len(backsxyz):
+                    print
+                    'Warning: Number of Nodes in Front surface (fronts) not equal to number of nodes in Back surface (backs). These sets will not be created!!'
+                    print
+                    '         Refer to error 06 troubleshooting in easyPBC user guide.'
+                    frontsxyz = {}
+                    error = True
+                if len(topsxyz) != len(botsxyz):
+                    print
+                    'Warning: Number of Nodes in Top surface (tops) not equal to number of nodes in Bottom surface (bots). These sets will not be created!!'
+                    print
+                    '         Refer to error 06 in easyPBC user guide.'
+                    topsxyz = {}
+                    error = True
+
+                ## Sorting and appending sets ##
+                for i in frontsxyz.keys():
+                    for k in backsxyz.keys():
+                        if abs(frontsxyz[i][1] - backsxyz[k][1]) <= meshsens:
+                            fronts.append(i)
+                            backs.append(k)
+
+                if len(frontsxyz) != len(fronts) or len(backsxyz) != len(backs):
+                    print
+                    'Warning: Node(s) in Front and/or Back surface (fronts and/or backs) was not imported. effected sets will not be created!!'
+                    print
+                    '         Refer to error 07 in easyPBC user guide and created Error set (if applicable).'
+                    for i, k in zip(frontsxyz.keys(), backsxyz.keys()):
+                        if i not in fronts:
+                            errorset.append(i)
+                        if k not in backs:
+                            errorset.append(k)
+                    fronts = []
+                    backs = []
+                    error = True
+                if len(fronts) != len(set(fronts)) or len(backs) != len(set(backs)):
+                    print
+                    'Warning: Node(s) in either Front or Back surface (fronts or backs) being linked with more than one opposite node. effected sets will not be created!!'
+                    print
+                    '         Refer to error 08 in easyPBC user guide.'
+                    fronts = []
+                    backs = []
+                    error = True
+
+                for i in topsxyz.keys():
+                    for k in botsxyz.keys():
+                        if abs(topsxyz[i][0] - botsxyz[k][0]) <= meshsens:
+                            tops.append(i)
+                            bots.append(k)
+                if len(topsxyz) != len(tops) or len(botsxyz) != len(bots):
+                    print
+                    'Warning: Node(s) in Top and/or Bottom surface (tops and/or bots) was not imported. effected sets will not be created!!'
+                    print
+                    '         Refer to error 07 in easyPBC user guide and created Error set (if applicable).'
+                    for i, k in zip(topsxyz.keys(), botsxyz.keys()):
+                        if i not in tops:
+                            errorset.append(i)
+                        if k not in bots:
+                            errorset.append(k)
+                    tops = []
+                    bots = []
+                    error = True
+                if len(tops) != len(set(tops)) or len(bots) != len(set(bots)):
+                    print
+                    'Warning: Node(s) in either Top or Bottom surface (tops or bots) being linked with more than one opposite node. effected sets will not be created!!'
+                    print
+                    '         Refer to error 08 in easyPBC user guide.'
+                    tops = []
+                    bots = []
+                    error = True
+                ## Creating ABAQUS sets ##
+                a.SetFromNodeLabels(name='c1', nodeLabels=((instanceName, c1),))
+                a.SetFromNodeLabels(name='c2', nodeLabels=((instanceName, c2),))
+                a.SetFromNodeLabels(name='c5', nodeLabels=((instanceName, c5),))
+                a.SetFromNodeLabels(name='c6', nodeLabels=((instanceName, c6),))
+                a.SetFromNodeLabels(name='fronts', nodeLabels=((instanceName, fronts),))
+                a.SetFromNodeLabels(name='backs', nodeLabels=((instanceName, backs),))
+                a.SetFromNodeLabels(name='tops', nodeLabels=((instanceName, tops),))
+                a.SetFromNodeLabels(name='bots', nodeLabels=((instanceName, bots),))
+                print('------ End of Sets Creation ------')
+
+                ## Extracting model mass ##
+                prop = mdb.models[modelName].rootAssembly.getMassProperties()
+                mass = prop['mass']
+
+                a = mdb.models[modelName].rootAssembly
+                Nodeset = mdb.models[modelName].rootAssembly.instances[instanceName].nodes
+                mdb.models[modelName].StaticStep(name='Step-1', previous='Initial')
+
+                ## Creating single-node ABAQUS sets ##
+                if error == False:
+
+                    if E11 == True or E22 == True or E33 == True or G12 == True or G13 == True or G23 == True:
+                        for i, k in zip(tops, bots):
+                            a.SetFromNodeLabels(name='tops%s' % (i), nodeLabels=((instanceName, [i]),))
+                            a.SetFromNodeLabels(name='bots%s' % (k), nodeLabels=((instanceName, [k]),))
+
+                        for i, k in zip(fronts, backs):
+                            a.SetFromNodeLabels(name='fronts%s' % (i), nodeLabels=((instanceName, [i]),))
+                            a.SetFromNodeLabels(name='backs%s' % (k), nodeLabels=((instanceName, [k]),))
+
+                    ## Creating constraints for elastic moduli ##
+                    if E11 == True or E22 == True:
+                        for i in mdb.models[modelName].constraints.keys():
+                            del mdb.models[modelName].constraints[i]
+
+                        for i, k in zip(tops, bots):
+                            mdb.models[modelName].Equation(name='E-1-tops-bots%s' % i,
+                                                           terms=((1.0, 'tops%s' % i, 1), (-1.0, 'bots%s' % k, 1)))
+                        for i, k in zip(tops, bots):
+                            mdb.models[modelName].Equation(name='E-2-tops-bots%s' % i, terms=(
+                                (1.0, 'tops%s' % i, 2), (-1.0, 'bots%s' % k, 2), (-1.0, 'RP5', 2)))
+
+                        for i, k in zip(fronts, backs):
+                            mdb.models[modelName].Equation(name='E-1-fronts-backs%s' % i, terms=(
+                                (1.0, 'fronts%s' % i, 1), (-1.0, 'backs%s' % k, 1), (-1.0, 'RP4', 1)))
+                        for i, k in zip(fronts, backs):
+                            mdb.models[modelName].Equation(name='E-2-fronts-backs%s' % i,
+                                                           terms=((1.0, 'fronts%s' % i, 2), (-1.0, 'backs%s' % k, 2)))
+
+                        mdb.models[modelName].Equation(name='E-1-c62', terms=((1.0, 'c6', 1), (-1.0, 'c2', 1)))
+                        mdb.models[modelName].Equation(name='E-1-c21',
+                                                       terms=((1.0, 'c2', 1), (-1.0, 'c1', 1), (1.0, 'RP4', 1)))
+                        mdb.models[modelName].Equation(name='E-1-c15', terms=((1.0, 'c1', 1), (-1.0, 'c5', 1)))
+
+                        mdb.models[modelName].Equation(name='E-2-c62',
+                                                       terms=((1.0, 'c6', 2), (-1.0, 'c2', 2), (1.0, 'RP5', 2)))
+                        mdb.models[modelName].Equation(name='E-2-c21', terms=((1.0, 'c2', 2), (-1.0, 'c1', 2)))
+                        mdb.models[modelName].Equation(name='E-2-c15',
+                                                       terms=((1.0, 'c1', 2), (-1.0, 'c5', 2), (-1.0, 'RP5', 2)))
+
+                    ## Elastic modulus E11 ##
+                    if E11 == True and onlyPBC == False:
+                        for i in mdb.models[modelName].loads.keys():
+                            del mdb.models[modelName].loads[i]
+                        for i in mdb.models[modelName].boundaryConditions.keys():
+                            del mdb.models[modelName].boundaryConditions[i]
+
+                        region = a.sets['RP4']
+                        mdb.models[modelName].DisplacementBC(name='E11-1', createStepName='Step-1',
+                                                             region=region, u1=Dispx, u2=UNSET, u3=UNSET, ur1=UNSET,
+                                                             ur2=UNSET, ur3=UNSET,
+                                                             amplitude=UNSET, fixed=OFF, distributionType=UNIFORM,
+                                                             fieldName='',
+                                                             localCsys=None)
+
+                        regionDef = mdb.models[modelName].rootAssembly.sets['c1']
+                        mdb.models[modelName].HistoryOutputRequest(name='H-Output-2',
+                                                                   createStepName='Step-1', variables=('RT',),
+                                                                   region=regionDef,
+                                                                   sectionPoints=DEFAULT, rebar=EXCLUDE)
+
+                        import os, glob
+
+                        mdb.Job(name='job-E11', model=modelName, description='', type=ANALYSIS,
+                                atTime=None, waitMinutes=0, waitHours=0, queue=None, memory=90,
+                                memoryUnits=PERCENTAGE, getMemoryFromAnalysis=True,
+                                explicitPrecision=SINGLE, nodalOutputPrecision=SINGLE, echoPrint=OFF,
+                                modelPrint=OFF, contactPrint=OFF, historyPrint=OFF, userSubroutine='',
+                                scratch='', multiprocessingMode=DEFAULT, numCpus=CPUs, numDomains=CPUs, numGPUs=0)
+                        mdb.jobs['job-E11'].submit(consistencyChecking=OFF)
+                        mdb.jobs['job-E11'].waitForCompletion()
+                        o3 = session.openOdb(name='%s' % (path + '\job-E11.odb'))
+
+                        odb = session.odbs['%s' % (path + '\job-E11.odb')]
+
+                        session.viewports['Viewport: 1'].setValues(displayedObject=o3)
+                        odbName = session.viewports[session.currentViewportName].odbDisplay.name
+
+                        for i in session.xyDataObjects.keys():
+                            del session.xyDataObjects['%s' % (i)]
+
+                        session.odbData[odbName].setValues(activeFrames=(('Step-1', (1,)),))
+                        session.xyDataListFromField(odb=odb, outputPosition=NODAL, variable=(('RF',
+                                                                                              NODAL,
+                                                                                              ((COMPONENT, 'RF1'),)),),
+                                                    nodeSets=('RP4',))
+
+                        forceE11 = 0
+                        for i in session.xyDataObjects.keys():
+                            forceE11 = forceE11 + (session.xyDataObjects[i][0][1])
+                        stressE11 = abs(forceE11 / (H * Thikness))
+
+                        E11 = stressE11 / (Dispx / L)
+
+                        for i in session.xyDataObjects.keys():
+                            del session.xyDataObjects['%s' % (i)]
+
+                        session.odbData[odbName].setValues(activeFrames=(('Step-1', (1,)),))
+                        session.xyDataListFromField(odb=odb, outputPosition=NODAL, variable=(('U',
+                                                                                              NODAL,
+                                                                                              ((COMPONENT, 'U1'),)),),
+                                                    nodeSets=('C1', 'C2',))
+
+                        C1U1new = session.xyDataObjects['U:U1 PI: %s N: %s' % (upperName, c1[0])][0][1] + coc1[(c1[0])][
+                            0]
+
+                        C2U1new = session.xyDataObjects['U:U1 PI: %s N: %s' % (upperName, c2[0])][0][1] + coc2[(c2[0])][
+                            0]
+                        Dis = abs(C1U1new - C2U1new)
+
+                        E11U1 = abs(L - Dis)
+
+                        for i in session.xyDataObjects.keys():
+                            del session.xyDataObjects['%s' % (i)]
+
+                        session.odbData[odbName].setValues(activeFrames=(('Step-1', (1,)),))
+                        session.xyDataListFromField(odb=odb, outputPosition=NODAL, variable=(('U',
+                                                                                              NODAL,
+                                                                                              ((COMPONENT, 'U2'),)),),
+                                                    nodeSets=('C1', 'C5',))
+
+                        C1U2new = session.xyDataObjects['U:U2 PI: %s N: %s' % (upperName, c1[0])][0][1] + coc1[(c1[0])][
+                            1]
+
+                        C5U2new = session.xyDataObjects['U:U2 PI: %s N: %s' % (upperName, c5[0])][0][1] + coc5[(c5[0])][
+                            1]
+                        Dis = abs(C1U2new - C5U2new)
+
+                        E11U2 = abs(H - Dis)
+
+                        for i in session.xyDataObjects.keys():
+                            del session.xyDataObjects['%s' % (i)]
+
+                        V12 = (E11U2 / H) / (E11U1 / L)
+
+                    ## Elastic modulus E22 ##
+                    if E11 == False or onlyPBC == True:
+                        E11 = 'N/A'
+                        V12 = 'N/A'
+
+                    if E22 == True and onlyPBC == False:
+
+                        for i in mdb.models[modelName].loads.keys():
+                            del mdb.models[modelName].loads[i]
+                        for i in mdb.models[modelName].boundaryConditions.keys():
+                            del mdb.models[modelName].boundaryConditions[i]
+
+                        region = a.sets['RP5']
+                        mdb.models[modelName].DisplacementBC(name='E22-1', createStepName='Step-1',
+                                                             region=region, u1=UNSET, u2=Dispy, u3=UNSET, ur1=UNSET,
+                                                             ur2=UNSET, ur3=UNSET,
+                                                             amplitude=UNSET, fixed=OFF, distributionType=UNIFORM,
+                                                             fieldName='',
+                                                             localCsys=None)
+
+                        regionDef = mdb.models[modelName].rootAssembly.sets['c1']
+                        mdb.models[modelName].HistoryOutputRequest(name='H-Output-2',
+                                                                   createStepName='Step-1', variables=('RT',),
+                                                                   region=regionDef,
+                                                                   sectionPoints=DEFAULT, rebar=EXCLUDE)
+
+                        import os, glob
+
+                        mdb.Job(name='job-E22', model=modelName, description='', type=ANALYSIS,
+                                atTime=None, waitMinutes=0, waitHours=0, queue=None, memory=90,
+                                memoryUnits=PERCENTAGE, getMemoryFromAnalysis=True,
+                                explicitPrecision=SINGLE, nodalOutputPrecision=SINGLE, echoPrint=OFF,
+                                modelPrint=OFF, contactPrint=OFF, historyPrint=OFF, userSubroutine='',
+                                scratch='', multiprocessingMode=DEFAULT, numCpus=CPUs, numDomains=CPUs, numGPUs=0)
+                        mdb.jobs['job-E22'].submit(consistencyChecking=OFF)
+                        mdb.jobs['job-E22'].waitForCompletion()
+                        o3 = session.openOdb(name='%s' % (path + '\job-E22.odb'))
+
+                        odb = session.odbs['%s' % (path + '\job-E22.odb')]
+
+                        session.viewports['Viewport: 1'].setValues(displayedObject=o3)
+                        odbName = session.viewports[session.currentViewportName].odbDisplay.name
+
+                        for i in session.xyDataObjects.keys():
+                            del session.xyDataObjects['%s' % (i)]
+
+                        session.odbData[odbName].setValues(activeFrames=(('Step-1', (1,)),))
+                        session.xyDataListFromField(odb=odb, outputPosition=NODAL, variable=(('RF',
+                                                                                              NODAL,
+                                                                                              ((COMPONENT, 'RF2'),)),),
+                                                    nodeSets=('RP5',))
+
+                        forceE22 = 0
+                        for i in session.xyDataObjects.keys():
+                            forceE22 = forceE22 + (session.xyDataObjects[i][0][1])
+
+                        stressE22 = abs(forceE22 / (L * Thikness))
+
+                        E22 = stressE22 / (Dispy / H)
+
+                        for i in session.xyDataObjects.keys():
+                            del session.xyDataObjects['%s' % (i)]
+
+                        session.odbData[odbName].setValues(activeFrames=(('Step-1', (1,)),))
+                        session.xyDataListFromField(odb=odb, outputPosition=NODAL, variable=(('U',
+                                                                                              NODAL,
+                                                                                              ((COMPONENT, 'U1'),)),),
+                                                    nodeSets=('C1', 'C2',))
+
+                        C1U1new = session.xyDataObjects['U:U1 PI: %s N: %s' % (upperName, c1[0])][0][1] + coc1[(c1[0])][
+                            0]
+
+                        C2U1new = session.xyDataObjects['U:U1 PI: %s N: %s' % (upperName, c2[0])][0][1] + coc2[(c2[0])][
+                            0]
+                        Dis = abs(C1U1new - C2U1new)
+
+                        E22U1 = abs(L - Dis)
+
+                        for i in session.xyDataObjects.keys():
+                            del session.xyDataObjects['%s' % (i)]
+
+                        session.odbData[odbName].setValues(activeFrames=(('Step-1', (1,)),))
+                        session.xyDataListFromField(odb=odb, outputPosition=NODAL, variable=(('U',
+                                                                                              NODAL,
+                                                                                              ((COMPONENT, 'U2'),)),),
+                                                    nodeSets=('C1', 'C5',))
+
+                        C1U2new = session.xyDataObjects['U:U2 PI: %s N: %s' % (upperName, c1[0])][0][1] + coc1[(c1[0])][
+                            1]
+
+                        C5U2new = session.xyDataObjects['U:U2 PI: %s N: %s' % (upperName, c5[0])][0][1] + coc5[(c5[0])][
+                            1]
+                        Dis = abs(C1U2new - C5U2new)
+
+                        E22U2 = abs(H - Dis)
+
+                        for i in session.xyDataObjects.keys():
+                            del session.xyDataObjects['%s' % (i)]
+
+                        V21 = (E22U1 / L) / (E22U2 / H)
+
+                    ## Elastic modulus E33 ##
+                    if E22 == False or onlyPBC == True:
+                        E22 = 'N/A'
+                        V21 = 'N/A'
+
+                    ## Creating constraints for shear moduli ##
+                    if G12 == True:
+                        if onlyPBC == False:
+                            for i in mdb.models[modelName].constraints.keys():
+                                del mdb.models[modelName].constraints[i]
+
+                        for i, k in zip(tops, bots):
+                            mdb.models[modelName].Equation(name='G-1-tops-bots%s' % i, terms=(
+                                (1.0, 'tops%s' % i, 1), (-1.0, 'bots%s' % k, 1), (-1.0, 'RP4', 1)))
+                        for i, k in zip(tops, bots):
+                            mdb.models[modelName].Equation(name='G-2-tops-bots%s' % i, terms=(
+                                (1.0, 'tops%s' % i, 2), (-1.0, 'bots%s' % k, 2), (-1.0, 'RP1', 2)))
+
+                        for i, k in zip(fronts, backs):
+                            mdb.models[modelName].Equation(name='G-1-fronts-backs%s' % i, terms=(
+                                (1.0, 'fronts%s' % i, 1), (-1.0, 'backs%s' % k, 1), (-1.0, 'RP3', 1)))
+                        for i, k in zip(fronts, backs):
+                            mdb.models[modelName].Equation(name='G-2-fronts-backs%s' % i, terms=(
+                                (1.0, 'fronts%s' % i, 2), (-1.0, 'backs%s' % k, 2), (-1.0, 'RP4', 2)))
+
+                        mdb.models[modelName].Equation(name='G-1-c62',
+                                                       terms=((1.0, 'c6', 1), (-1.0, 'c2', 1), (1.0, 'RP4', 1)))
+                        mdb.models[modelName].Equation(name='G-1-c21',
+                                                       terms=((1.0, 'c2', 1), (-1.0, 'c1', 1), (1.0, 'RP3', 1)))
+                        mdb.models[modelName].Equation(name='G-1-c15',
+                                                       terms=((1.0, 'c1', 1), (-1.0, 'c5', 1), (-1.0, 'RP4', 1)))
+
+                        mdb.models[modelName].Equation(name='G-2-c62',
+                                                       terms=((1.0, 'c6', 2), (-1.0, 'c2', 2), (1.0, 'RP1', 2)))
+                        mdb.models[modelName].Equation(name='G-2-c21',
+                                                       terms=((1.0, 'c2', 2), (-1.0, 'c1', 2), (1.0, 'RP4', 2)))
+                        mdb.models[modelName].Equation(name='G-2-c15',
+                                                       terms=((1.0, 'c1', 2), (-1.0, 'c5', 2), (-1.0, 'RP1', 2)))
+
+                    ## Shear modulus G12 ##
+                    if G12 == True and onlyPBC == False:
+                        for i in mdb.models[modelName].loads.keys():
+                            del mdb.models[modelName].loads[i]
+                        for i in mdb.models[modelName].boundaryConditions.keys():
+                            del mdb.models[modelName].boundaryConditions[i]
+
+                        region = a.sets['RP4']
+                        mdb.models[modelName].DisplacementBC(name='G12-1', createStepName='Step-1',
+                                                             region=region, u1=Dispx, u2=Dispy, u3=UNSET, ur1=UNSET,
+                                                             ur2=UNSET, ur3=UNSET,
+                                                             amplitude=UNSET, fixed=OFF, distributionType=UNIFORM,
+                                                             fieldName='',
+                                                             localCsys=None)
+
+                        regionDef = mdb.models[modelName].rootAssembly.sets['c1']
+                        mdb.models[modelName].HistoryOutputRequest(name='H-Output-2',
+                                                                   createStepName='Step-1', variables=('RT',),
+                                                                   region=regionDef,
+                                                                   sectionPoints=DEFAULT, rebar=EXCLUDE)
+
+                        import os, glob
+
+                        mdb.Job(name='job-G12', model=modelName, description='', type=ANALYSIS,
+                                atTime=None, waitMinutes=0, waitHours=0, queue=None, memory=90,
+                                memoryUnits=PERCENTAGE, getMemoryFromAnalysis=True,
+                                explicitPrecision=SINGLE, nodalOutputPrecision=SINGLE, echoPrint=OFF,
+                                modelPrint=OFF, contactPrint=OFF, historyPrint=OFF, userSubroutine='',
+                                scratch='', multiprocessingMode=DEFAULT, numCpus=CPUs, numDomains=CPUs, numGPUs=0)
+                        mdb.jobs['job-G12'].submit(consistencyChecking=OFF)
+
+                        mdb.jobs['job-G12'].waitForCompletion()
+
+                        o3 = session.openOdb(name='%s' % (path + '\job-G12.odb'))
+
+                        odb = session.odbs['%s' % (path + '\job-G12.odb')]
+
+                        session.viewports['Viewport: 1'].setValues(displayedObject=o3)
+                        odbName = session.viewports[session.currentViewportName].odbDisplay.name
+
+                        for i in session.xyDataObjects.keys():
+                            del session.xyDataObjects['%s' % (i)]
+
+                        session.odbData[odbName].setValues(activeFrames=(('Step-1', (1,)),))
+                        session.xyDataListFromField(odb=odb, outputPosition=NODAL, variable=(('RF',
+                                                                                              NODAL,
+                                                                                              ((COMPONENT, 'RF1'),)),),
+                                                    nodeSets=('RP4',))
+
+                        forceG12 = 0
+                        for i in session.xyDataObjects.keys():
+                            forceG12 = forceG12 + (session.xyDataObjects[i][0][1])
+
+                        stressG12 = abs(forceG12 / (L * Thikness))
+
+                        G12 = stressG12 / ((Dispx / H) + (Dispy / L))
+
+                    ## Shear modulus G13 ##
+                    if G12 == False or onlyPBC == True:
+                        G12 = 'N/A'
+
+                    E33 = 'N/A'
+                    G13 = 'N/A'
+                    G23 = 'N/A'
+
+                    density = 0
+                    if mass != None:
+                        density = mass / (L * W * H)
+
+                    print('----------------------------------------------------')
+                    print('----------------------------------------------------')
+                    print('The homogenised elastic properties:')
+                    print('E11=%s Stress units' % (E11))
+                    print('V12=%s ratio' % (V12))
+                    print('E22=%s Stress units' % (E22))
+                    print('V21=%s ratio' % (V21))
+                    print('G12=%s Stress units' % (G12))
+                    print('----------------------------------------------------')
+                    print('Total mass=%s Mass units' % (mass))
+                    print('Homogenised density=%s Density units' % (density))
+                    print('----------------------------------------------------')
+                    print('Processing duration %s seconds' % (time.time() - start))
+                    print('----------------------------------------------------')
+
+                    filename = ('Output/%s.txt' % epoch)
+                    f = open(filename, 'w')
+                    f.write(format(E11) + '\n')
+                    f.write(format(V12))
+                    f.close()
+
+                    print(
+                        'Citation: Omairey S, Dunning P, Sriramula S (2018) Development of an ABAQUS plugin tool for periodic RVE homogenisation.')
+                    print('Engineering with Computers. https://doi.org/10.1007/s00366-018-0616-4')
+
+
+                    print('----------------------------------------------------')
+                    if onlyPBC == True:
+                        print(
+                            'EasyPBC created Period Boundary Conditions only. For further investigation, used relevant Reference Points to apply loads/displacements based on your needs. Details on the use of Reference Points are illustrated in Table 1 of the referred paper.')
+
+                    for i in session.xyDataObjects.keys():
+                        del session.xyDataObjects['%s' % (i)]
+                    print('---------------------------------------')
+                    print('--------- End of EasyPBC (2D) ---------')
+                    print('---------------------------------------')
+
+                    if len(session.odbData.keys()) >= 1:
+                        odb.close(odb, write=TRUE)
+                        a = mdb.models[modelName].rootAssembly
+                        session.viewports['Viewport: 1'].setValues(displayedObject=a)
+
+
+
+                continue
+
+
+    feasypbc("Model-1", "Part-1-1", 10E-8, True, False, False, False, False, False, False, 1, False, 0, 100)
+    print("Num of Iteration:", epoch)
+
